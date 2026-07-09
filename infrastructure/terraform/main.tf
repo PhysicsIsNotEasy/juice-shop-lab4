@@ -4,12 +4,12 @@ provider "aws" {
 
 resource "null_resource" "docker_build" {
   triggers = {
-    dockerfile_hash = filemd5("${path.module}/../infrastructure/Dockerfile")
-    compose_hash    = filemd5("${path.module}/../infrastructure/docker-compose.yml")
+    dockerfile_hash = filemd5("${path.module}/../Dockerfile")
+    compose_hash    = filemd5("${path.module}/../docker-compose.yml")
   }
 
   provisioner "local-exec" {
-    command = "docker build -t ${var.ecr_repository_url}:${var.container_tag} -f ${path.module}/../infrastructure/Dockerfile ${path.module}/.."
+    command = "docker build -t ${var.ecr_repository_url}:${var.container_tag} -f ${path.module}/../Dockerfile ${path.module}/.."
   }
 
   provisioner "local-exec" {
