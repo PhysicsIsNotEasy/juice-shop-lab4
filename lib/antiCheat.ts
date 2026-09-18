@@ -5,7 +5,6 @@
 
 import config from 'config'
 import colors from 'colors/safe'
-import path from 'path'
 import fs from 'fs'
 import { retrieveCodeSnippet } from '../routes/vulnCodeSnippet'
 import { readFixes } from '../routes/vulnCodeFixes'
@@ -14,6 +13,7 @@ import { getCodeChallenges } from './codingChallenges'
 import logger from './logger'
 import { type NextFunction, type Request, type Response } from 'express'
 import * as utils from './utils'
+import * as security from './insecurity'
 // @ts-expect-error FIXME due to non-existing type definitions for median
 import median from 'median'
 import { type ChallengeKey } from '@juice-shop/models/challenge'
@@ -193,7 +193,8 @@ function loadSourceFile (relativePath: string): string {
     return sourceFileCache.get(relativePath)!
   }
   try {
-    const content = fs.readFileSync(path.resolve(relativePath), 'utf8')
+    const safePath = security.getSafeFilePath(relativePath)
+    const content = fs.readFileSync(safePath, 'utf8')
     sourceFileCache.set(relativePath, content)
     return content
   } catch {

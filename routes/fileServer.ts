@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from 'node:path'
 import { type Request, type Response, type NextFunction } from 'express'
 
 import * as security from '../lib/insecurity'
@@ -11,7 +10,7 @@ import { challenges } from '../data/datacache'
 import * as challengeUtils from '../lib/challengeUtils'
 
 export function servePublicFiles () {
-  return ({ params, query }: Request, res: Response, next: NextFunction) => {
+  return ({ params }: Request, res: Response, next: NextFunction) => {
     const file = params.file
 
     if (!file.includes('/')) {
@@ -29,7 +28,12 @@ export function servePublicFiles () {
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(file)
 
-      res.sendFile(path.resolve('ftp/', file))
+      try {
+        security.sendSafeFile(res, file, 'ftp')
+      } catch (error) {
+        res.status(403)
+        next(error)
+      }
     } else {
       res.status(403)
       next(new Error('Only .md and .pdf files are allowed!'))
