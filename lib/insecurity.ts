@@ -69,6 +69,137 @@ export const decode = (token: string) => { return jws.decode(token)?.payload }
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
 export const sanitizeFilename = (filename: string) => sanitizeFilenameLib(filename)
+
+export function evaluateSafeArithmeticExpression (expression: string): number {
+  const sanitized = expression.replace(/\s+/g, '')
+  if (!/^(?:\d+\.?\d*|\.\d+|[()+\-*/])+$/i.test(sanitized)) {
+    throw new Error('Unsupported expression')
+  }
+
+  const values: number[] = []
+  const operators: string[] = []
+  const precedence: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2 }
+
+  const applyOperator = (operator: string) => {
+    const right = values.pop()
+    const left = values.pop()
+
+    if (left === undefined || right === undefined) {
+      throw new Error('Invalid expression')
+    }
+
+    switch (operator) {
+      case '+':
+        values.push(left + right)
+        break
+      case '-':
+        values.push(left - right)
+        break
+      case '*':
+        values.push(left * right)
+        break
+      case '/':
+        if (right === 0) {
+          throw new Error('Division by zero')
+        }
+        values.push(left / right)
+        break
+      default:
+        throw new Error('Unsupported operator')
+    }
+  }
+
+  const tokens = sanitized.match(/\d+\.?\d*|\.\d+|[()+\-*/]/g) ?? []
+  if (tokens.length === 0) {
+    throw new Error('Empty expression')
+  }
+
+  for (const token of tokens) {
+    if (/^\d+(?:\.\d+)?$|^\.\d+$/.test(token)) {
+      values.push(Number(token))
+      continue
+    }
+
+    if (token === '(') {
+      operators.push(token)
+      continue
+    }
+
+    if (token === ')') {
+      while (operators.length && operators[operators.length - 1] !== '(') {
+        applyOperator(operators.pop() as string)
+      }
+      if (operators.pop() !== '(') {
+        throw new Error('Mismatched parentheses')
+      }
+      continue
+    }
+
+    while (
+      operators.length &&
+      operators[operators.length - 1] !== '(' &&
+      precedence[operators[operators.length - 1] as string] >= precedence[token]
+    ) {
+      applyOperator(operators.pop() as string)
+    }
+    operators.push(token)
+  }
+
+  while (operators.length) {
+    const operator = operators.pop()
+    if (operator === '(') {
+      throw new Error('Mismatched parentheses')
+    }
+    applyOperator(operator as string)
+  }
+
+  if (values.length !== 1) {
+    throw new Error('Malformed expression')
+  }
+
+  return values[0]
+}
+
+export const getSafeFilePath = (file: string, baseDir = '.') => {
+  if (typeof file !== 'string' || file.length === 0) {
+    throw new Error('Invalid file name!')
+  }
+
+  if (file.includes('/') || file.includes('\\') || file.includes('..') || path.isAbsolute(file)) {
+    throw new Error('File names cannot contain path separators or traversal sequences!')
+  }
+
+  const safeFile = path.basename(file)
+  if (safeFile !== file || !/^[A-Za-z0-9._-]+$/.test(safeFile)) {
+    throw new Error('Invalid file name!')
+  }
+
+  const resolvedBaseDir = path.resolve(baseDir)
+  const resolvedFilePath = path.resolve(resolvedBaseDir, safeFile)
+  const relativePath = path.relative(resolvedBaseDir, resolvedFilePath)
+
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error('File must stay inside the configured root directory!')
+  }
+
+  if (fs.existsSync(resolvedBaseDir)) {
+    const realBaseDir = fs.realpathSync(resolvedBaseDir)
+    const realFilePath = fs.existsSync(resolvedFilePath) ? fs.realpathSync(resolvedFilePath) : resolvedFilePath
+    const realRelativePath = path.relative(realBaseDir, realFilePath)
+
+    if (realRelativePath.startsWith('..') || path.isAbsolute(realRelativePath)) {
+      throw new Error('File escapes the configured root directory!')
+    }
+  }
+
+  return resolvedFilePath
+}
+
+export const sendSafeFile = (res: Response, file: string, baseDir = '.') => {
+  const safeFilePath = getSafeFilePath(file, baseDir)
+  return res.sendFile(safeFilePath)
+}
+
 export const sanitizeSecure = (html: string): string => {
   const sanitized = sanitizeHtml(html)
   if (sanitized === html) {
