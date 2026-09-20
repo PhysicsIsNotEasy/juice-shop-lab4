@@ -7,10 +7,11 @@ import packageJson from '../package.json'
 import fs from 'node:fs'
 import logger from './logger'
 import config from 'config'
-import download from 'download'
 import crypto from 'node:crypto'
 import clarinet from 'clarinet'
 import type { Challenge } from '@juice-shop/data/types'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 
 import isHeroku from './is-heroku'
 import isDocker from './is-docker'
@@ -106,10 +107,24 @@ export const extractFilename = (url: string) => {
 }
 
 export const downloadToFile = async (url: string, dest: string) => {
+  const temporaryDestination = `${dest}.${crypto.randomUUID()}.tmp`
+
   try {
-    const data = await download(url)
-    fs.writeFileSync(dest, data)
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`)
+    }
+    if (!response.body) {
+      throw new Error('Response body is null')
+    }
+
+    await pipeline(
+      Readable.fromWeb(response.body),
+      fs.createWriteStream(temporaryDestination)
+    )
+    await fs.promises.rename(temporaryDestination, dest)
   } catch (err) {
+    await fs.promises.rm(temporaryDestination, { force: true })
     logger.warn('Failed to download ' + url + ' (' + getErrorMessage(err) + ')')
   }
 }
