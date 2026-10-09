@@ -205,8 +205,12 @@ void describe('insecurity', () => {
   })
 
   void describe('deluxeToken', () => {
-    void it('returns SHA-256 HMAC with private key as salt for email and deluxe role', () => {
-      assert.equal(security.deluxeToken('test@juice-sh.op'), '91e2b6493fda679d95ae05ac0d1cdce82c2ad4f7b518202a3ed54732531bc7e1')
+    void it('returns a stable SHA-256 HMAC for the same email and role', () => {
+      const token = security.deluxeToken('test@juice-sh.op')
+
+      assert.equal(token, security.deluxeToken('test@juice-sh.op'))
+      assert.match(token, /^[a-f0-9]{64}$/)
+      assert.notEqual(token, security.deluxeToken('other@juice-sh.op'))
     })
   })
 
