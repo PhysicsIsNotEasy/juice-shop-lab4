@@ -68,10 +68,6 @@ config/*.yml
 # System Files
 .DS_Store
 
-# Runtime secrets
-/encryptionkeys/jwt.key
-/encryptionkeys/hmac.key
-
 # Misc
 .playwright-mcp/
 cypress/screenshots/
